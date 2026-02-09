@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from starlette import status
 
 from app import auth
-from app.auth import db_dependency, get_current_user, oauth2_bearer
+from app.auth import db_dependency, oauth2_bearer
 from app.config import settings
 from app.database import (Base, PaginatedTaskResponse, PriorityEnum,
                           StatusEnum, TaskCreate, TaskFilter, TaskOrder,
@@ -73,9 +73,7 @@ def read_tasks(
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
-    tasks = (
-        db.query(Tasks)
-    )
+    tasks = db.query(Tasks)
     if user.role != "admin":
         tasks = tasks.filter(Tasks.user_id == user.id)
     tasks = tasks.offset(skip).limit(limit).all()
@@ -168,9 +166,7 @@ def create_task(user: user_dependency, task: TaskCreate, db: Session = Depends(g
 def update_task(
     user: user_dependency, task_id: int, task: TaskCreate, db: Session = Depends(get_db)
 ):
-    existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id)
-    )
+    existing_task = db.query(Tasks).filter(Tasks.id == task_id)
     if user.role != "admin":
         existing_task = existing_task.filter(Tasks.user_id == user.id)
 
@@ -203,9 +199,7 @@ def update_task_partial(
     task: TaskPartialUpdate,
     db: Session = Depends(get_db),
 ):
-    existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id)
-    )
+    existing_task = db.query(Tasks).filter(Tasks.id == task_id)
     if user.role != "admin":
         existing_task = existing_task.filter(Tasks.user_id == user.id)
     existing_task = existing_task.first()
@@ -233,13 +227,11 @@ def update_task_partial(
 
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
-    existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id)
-    )
+    existing_task = db.query(Tasks).filter(Tasks.id == task_id)
     if user.role != "admin":
         existing_task = existing_task.filter(Tasks.user_id == user.id)
     existing_task = existing_task.first()
-    
+
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(existing_task)

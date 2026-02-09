@@ -31,9 +31,11 @@ class PriorityEnum(str, Enum):
     medium = "medium"
     high = "high"
 
+
 class RoleEnum(str, Enum):
     user = "user"
     admin = "admin"
+
 
 class TaskFilter(str, Enum):
     created_at = "created_at"
@@ -60,6 +62,7 @@ class Tasks(Base):
     created_at = Column(Date, nullable=False)
     updated_at = Column(Date, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
 
 # Link our engine with our table
 Base.metadata.create_all(engine)

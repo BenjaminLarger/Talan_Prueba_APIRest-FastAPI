@@ -80,7 +80,9 @@ async def login_for_access_token(
             detail="Incorrect username or password",
         )
 
-    token = create_access_token(user.username, user.id, user.role, timedelta(minutes=30))
+    token = create_access_token(
+        user.username, user.id, user.role, timedelta(minutes=30)
+    )
 
     return {"access_token": token, "token_type": "bearer"}
 
@@ -92,7 +94,9 @@ def authenticate_user(db: Session, username: str, password: str):
     return user
 
 
-def create_access_token(username: str, user_id: int, role: str, expires_delta: timedelta):
+def create_access_token(
+    username: str, user_id: int, role: str, expires_delta: timedelta
+):
     encode = {
         "sub": username,
         "user_id": user_id,
