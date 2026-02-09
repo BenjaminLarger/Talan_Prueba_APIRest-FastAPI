@@ -1,22 +1,24 @@
-from datetime import timedelta, datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
+
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette import status
+
 from app.database import get_db
 from app.models.user import Users
-from passlib.context import CryptContext
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
 router = APIRouter(
-  prefix="/auth", # Prefix for all authentication-related routes
-  tags=["auth"], # Separate tags for better documentation
+    prefix="/auth",  # Prefix for all authentication-related routes
+    tags=["auth"],  # Separate tags for better documentation
 )
 
 # Secret key and algorithm for JWT
@@ -24,43 +26,64 @@ bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
+
 class CreateUserRequest(BaseModel):
     username: str
     password: str
+
 
 # Token validation and creation
 class Token(BaseModel):
     access_token: str
     token_type: str
 
+
 db_dependency = Annotated[Session, Depends(get_db)]
+
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def create_user(db: db_dependency, create_user_request: CreateUserRequest):
-    existing_user = db.query(Users).filter(Users.username == create_user_request.username).first()
+    existing_user = (
+        db.query(Users).filter(Users.username == create_user_request.username).first()
+    )
     if existing_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
+        )
     # Check if username/password is empty
     if not create_user_request.username:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username cannot be empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Username cannot be empty"
+        )
     if not create_user_request.password:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password cannot be empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Password cannot be empty"
+        )
     hashed_password = bcrypt_context.hash(create_user_request.password[:72])
-    new_user = Users(username=create_user_request.username, hashed_password=hashed_password)
+    new_user = Users(
+        username=create_user_request.username, hashed_password=hashed_password
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return {"message": "User created successfully"}
 
+
 @router.post("/token", response_model=Token)
-async def login_for_access_token(db: db_dependency, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login_for_access_token(
+    db: db_dependency, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+):
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+        )
 
     token = create_access_token(user.username, user.id, timedelta(minutes=30))
 
     return {"access_token": token, "token_type": "bearer"}
+
 
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(Users).filter(Users.username == username).first()
@@ -68,19 +91,38 @@ def authenticate_user(db: Session, username: str, password: str):
         return False
     return user
 
+
 def create_access_token(username: str, user_id: int, expires_delta: timedelta):
-    encode = {"sub": username, "user_id": user_id, "exp": datetime.now(timezone.utc) + expires_delta}
+    encode = {
+        "sub": username,
+        "user_id": user_id,
+        "exp": datetime.now(timezone.utc) + expires_delta,
+    }
     return jwt.encode(encode, os.getenv("SECRET_KEY"), algorithm=os.getenv("ALGORITHM"))
 
 
-def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
+def get_current_user(
+    token: Annotated[str, Depends(oauth2_bearer)], db: db_dependency = None
+):
     try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")])
+        payload = jwt.decode(
+            token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")]
+        )
         username: str = payload.get("sub")
         user_id: int = payload.get("user_id")
         if username is None or user_id is None:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+        if db:
+            user = db.query(Users).filter(Users.id == user_id).first()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+                )
+            return user
         return {"username": username, "user_id": user_id}
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )

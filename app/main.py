@@ -1,23 +1,50 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
+from jose import JWTError, jwt
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
+from starlette import status
 
 from app import auth
+from app.auth import db_dependency, get_current_user, oauth2_bearer
 from app.config import settings
 from app.database import (Base, PaginatedTaskResponse, PriorityEnum,
                           StatusEnum, TaskCreate, TaskFilter, TaskOrder,
                           TaskPartialUpdate, TaskResponse, Tasks, engine,
                           get_db)
-
-from app.auth import get_current_user, db_dependency
-from starlette import status
 from app.models.user import Users
 
-user_dependency = Annotated[Users, Depends(get_current_user)]
+
+def get_current_user_with_db(
+    token: Annotated[str, Depends(oauth2_bearer)], db: Session = Depends(get_db)
+) -> Users:
+    try:
+        payload = jwt.decode(
+            token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")]
+        )
+        user_id: int = payload.get("user_id")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+            )
+        user = db.query(Users).filter(Users.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+            )
+        return user
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
+
+
+user_dependency = Annotated[Users, Depends(get_current_user_with_db)]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,7 +53,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan, )
+app = FastAPI(
+    title=settings.app_name,
+    debug=settings.debug,
+    lifespan=lifespan,
+)
 app.include_router(auth.router)
 
 
@@ -36,8 +67,15 @@ def health_check():
 
 
 @app.get("/all_tasks/", response_model=list[TaskResponse])
-def read_tasks(user: user_dependency, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    tasks = db.query(Tasks).offset(skip).limit(limit).all()
+def read_tasks(
+    user: user_dependency,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    tasks = (
+        db.query(Tasks).filter(Tasks.user_id == user.id).offset(skip).limit(limit).all()
+    )
     return tasks
 
 
@@ -54,7 +92,7 @@ def list_tasks(
     order: TaskOrder = TaskOrder.asc,
     db: Session = Depends(get_db),
 ):
-    query_set = db.query(Tasks)
+    query_set = db.query(Tasks).filter(Tasks.user_id == user.id)
 
     if status:
         query_set = query_set.filter(Tasks.status == status.value)
@@ -83,7 +121,7 @@ def list_tasks(
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task_by_id(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
-    task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    task = db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -91,7 +129,6 @@ def get_task_by_id(user: user_dependency, task_id: int, db: Session = Depends(ge
 
 @app.post("/tasks/", response_model=TaskResponse, status_code=201)
 def create_task(user: user_dependency, task: TaskCreate, db: Session = Depends(get_db)):
-
     # Convert due_date from DD/MM/YYYY string to date object
     due_date_obj = None
     if task.due_date:
@@ -107,6 +144,7 @@ def create_task(user: user_dependency, task: TaskCreate, db: Session = Depends(g
         due_date=due_date_obj,
         created_at=current_date,
         updated_at=current_date,
+        user_id=user.id,
     )
     db.add(new_task)
     db.commit()
@@ -115,8 +153,12 @@ def create_task(user: user_dependency, task: TaskCreate, db: Session = Depends(g
 
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
-def update_task(user: user_dependency, task_id: int, task: TaskCreate, db: Session = Depends(get_db)):
-    existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
+def update_task(
+    user: user_dependency, task_id: int, task: TaskCreate, db: Session = Depends(get_db)
+):
+    existing_task = (
+        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+    )
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -139,9 +181,14 @@ def update_task(user: user_dependency, task_id: int, task: TaskCreate, db: Sessi
 
 @app.patch("/tasks/{task_id}", response_model=TaskResponse)
 def update_task_partial(
-    user: user_dependency, task_id: int, task: TaskPartialUpdate, db: Session = Depends(get_db)
+    user: user_dependency,
+    task_id: int,
+    task: TaskPartialUpdate,
+    db: Session = Depends(get_db),
 ):
-    existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    existing_task = (
+        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+    )
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -165,7 +212,9 @@ def update_task_partial(
 
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
-    existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    existing_task = (
+        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+    )
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(existing_task)
@@ -175,14 +224,15 @@ def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_d
 
 @app.delete("/tasks/", status_code=204)
 def delete_all_tasks(user: user_dependency, db: Session = Depends(get_db)):
-    db.query(Tasks).delete()
+    db.query(Tasks).filter(Tasks.user_id == user.id).delete()
     db.commit()
     return {}
 
-  
+
 @app.get("/", status_code=status.HTTP_200_OK)
 async def user(user: user_dependency, db: db_dependency):
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
     return {"User": user}
-

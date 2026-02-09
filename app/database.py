@@ -3,11 +3,12 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, field_validator
-from sqlalchemy import Column, Date, Integer, String, create_engine
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
+from app.models.user import Users
 
 # Create SQLite engine
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
@@ -55,7 +56,7 @@ class Tasks(Base):
     due_date = Column(Date, nullable=True)
     created_at = Column(Date, nullable=False)
     updated_at = Column(Date, nullable=False)
-
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
 # Link our engine with our table
 Base.metadata.create_all(engine)
