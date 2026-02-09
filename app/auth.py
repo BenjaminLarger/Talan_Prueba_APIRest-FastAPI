@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette import status
-from app.database import SessionLocal
+from app.database import get_db
 from app.models.user import Users
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -33,13 +33,6 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 db_dependency = Annotated[Session, Depends(get_db)]
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -47,7 +40,11 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
     existing_user = db.query(Users).filter(Users.username == create_user_request.username).first()
     if existing_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
-
+    # Check if username/password is empty
+    if not create_user_request.username:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username cannot be empty")
+    if not create_user_request.password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password cannot be empty")
     hashed_password = bcrypt_context.hash(create_user_request.password[:72])
     new_user = Users(username=create_user_request.username, hashed_password=hashed_password)
     db.add(new_user)
@@ -68,8 +65,6 @@ async def login_for_access_token(db: db_dependency, form_data: Annotated[OAuth2P
 def authenticate_user(db: Session, username: str, password: str):
     user = db.query(Users).filter(Users.username == username).first()
     if not user or not bcrypt_context.verify(password, user.hashed_password):
-        return False
-    if not bcrypt_context.verify(password, user.hashed_password):
         return False
     return user
 
