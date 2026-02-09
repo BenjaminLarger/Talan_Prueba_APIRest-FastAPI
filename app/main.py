@@ -3,11 +3,15 @@ from datetime import date, datetime
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import asc, desc
+from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import Base, TaskCreate, TaskResponse, Tasks, engine, get_db, PaginatedTaskResponse, TaskOrder, StatusEnum, PriorityEnum, TaskFilter
+from app.database import (Base, PaginatedTaskResponse, PriorityEnum,
+                          StatusEnum, TaskCreate, TaskFilter, TaskOrder,
+                          TaskPartialUpdate, TaskResponse, Tasks, engine,
+                          get_db)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,7 +49,7 @@ def list_tasks(
     due_after: Optional[str] = None,
     sort_by: TaskFilter = TaskFilter.created_at,
     order: TaskOrder = TaskOrder.asc,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     query_set = db.query(Tasks)
 
@@ -67,13 +71,12 @@ def list_tasks(
     query_set = query_set.order_by(order_func(sort_column))
 
     total = query_set.count()
-    items = (
-        query_set.offset((page - 1) * size)
-        .limit(size)
-        .all()
-    )
+    items = query_set.offset((page - 1) * size).limit(size).all()
     pages = (total + size - 1) // size
-    return PaginatedTaskResponse(items=items, total=total, page=page, size=size, pages=pages)
+    return PaginatedTaskResponse(
+        items=items, total=total, page=page, size=size, pages=pages
+    )
+
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
@@ -81,6 +84,7 @@ def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="Task not found")
     return user
+
 
 @app.post("/tasks/", response_model=TaskResponse, status_code=201)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
@@ -123,6 +127,32 @@ def update_task(task_id: int, task: TaskCreate, db: Session = Depends(get_db)):
     existing_task.status = task.status
     existing_task.priority = task.priority
     existing_task.due_date = due_date_obj
+    existing_task.updated_at = date.today()
+
+    db.commit()
+    db.refresh(existing_task)
+    return existing_task
+
+
+@app.patch("/tasks/{task_id}", response_model=TaskResponse)
+def update_task_partial(
+    task_id: int, task: TaskPartialUpdate, db: Session = Depends(get_db)
+):
+    existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.title is not None:
+        existing_task.title = task.title
+    if task.description is not None:
+        existing_task.description = task.description
+    if task.status is not None:
+        existing_task.status = task.status
+    if task.priority is not None:
+        existing_task.priority = task.priority
+    if task.due_date is not None:
+        existing_task.due_date = datetime.strptime(task.due_date, "%d/%m/%Y").date()
+
     existing_task.updated_at = date.today()
 
     db.commit()
