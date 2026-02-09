@@ -42,7 +42,7 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
     return user
 
 
-@app.post("/tasks/", response_model=TaskResponse)
+@app.post("/tasks/", response_model=TaskResponse, status_code=201)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
 
     # Convert due_date from DD/MM/YYYY string to date object
