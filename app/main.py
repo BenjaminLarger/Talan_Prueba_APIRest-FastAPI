@@ -160,18 +160,18 @@ def update_task_partial(
     return existing_task
 
 
-@app.delete("/tasks/{task_id}")
+@app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
     existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(existing_task)
     db.commit()
-    return {"detail": "Task deleted successfully"}
+    return {}
 
 
-@app.delete("/tasks/")
+@app.delete("/tasks/", status_code=204)
 def delete_all_tasks(db: Session = Depends(get_db)):
-    deleted_count = db.query(Tasks).delete()
+    db.query(Tasks).delete()
     db.commit()
-    return {"detail": f"Deleted {deleted_count} tasks successfully"}
+    return {}
