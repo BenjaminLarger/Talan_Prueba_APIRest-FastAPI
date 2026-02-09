@@ -7,7 +7,11 @@ aiosqlite>=0.19.0
 python-dotenv>=1.0.0
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
+bcrypt==4.1.2
 python-multipart>=0.0.9
 pytest>=8.0.0
+pytest-cov>=4.1.0
+httpx>=0.25.0
 black>=24.0.0
 isort>=5.13.0
+
