@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, field_validator
@@ -7,7 +8,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from enum import Enum
 
 # Create SQLite engine
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
@@ -18,15 +18,18 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create Base class for models
 Base = declarative_base()
 
+
 class StatusEnum(str, Enum):
     pending = "pending"
     in_progress = "in_progress"
     completed = "done"
 
+
 class PriorityEnum(str, Enum):
     low = "low"
     medium = "medium"
     high = "high"
+
 
 # Databasee Model
 class Tasks(Base):
