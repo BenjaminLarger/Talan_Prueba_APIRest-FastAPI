@@ -30,6 +30,15 @@ class PriorityEnum(str, Enum):
     medium = "medium"
     high = "high"
 
+class TaskFilter(str, Enum):
+    created_at = "created_at"
+    due_date = "due_date"
+    priority = "priority"
+    status = "status"
+
+class TaskOrder(str, Enum):
+    asc = "asc"
+    desc = "desc"
 
 # Databasee Model
 class Tasks(Base):
@@ -85,6 +94,31 @@ class TaskResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TaskQueryParams(BaseModel):
+    page: int = 1
+    size: int = 10
+    status: Optional[StatusEnum] = None
+    priority: Optional[PriorityEnum] = None
+    due_before: Optional[str] = None
+    due_after: Optional[str] = None
+    sort_by: Optional[TaskFilter] = TaskFilter.created_at
+    order: Optional[TaskOrder] = TaskOrder.asc
+
+    @field_validator("due_before", "due_after",)
+    @classmethod
+    def validate_dates(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return datetime.strptime(v, "%d/%m/%Y").date()
+        return v
+
+class PaginatedTaskResponse(BaseModel):
+    items: list[TaskResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
 
 def get_db():
     """Dependency to get a database session"""

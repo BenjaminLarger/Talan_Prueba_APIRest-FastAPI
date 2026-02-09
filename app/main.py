@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime
+from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import asc, desc
 
 from app.config import settings
-from app.database import Base, TaskCreate, TaskResponse, Tasks, engine, get_db
-
+from app.database import Base, TaskCreate, TaskResponse, Tasks, engine, get_db, PaginatedTaskResponse, TaskOrder, StatusEnum, PriorityEnum, TaskFilter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,19 +29,58 @@ def health_check():
     return {"status": "ok"}
 
 
-@app.get("/tasks/", response_model=list[TaskResponse])
+@app.get("/all_tasks/", response_model=list[TaskResponse])
 def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     tasks = db.query(Tasks).offset(skip).limit(limit).all()
     return tasks
 
 
+@app.get("/tasks/", response_model=PaginatedTaskResponse)
+def list_tasks(
+    page: int = 1,
+    size: int = 10,
+    status: Optional[StatusEnum] = None,
+    priority: Optional[PriorityEnum] = None,
+    due_before: Optional[str] = None,
+    due_after: Optional[str] = None,
+    sort_by: TaskFilter = TaskFilter.created_at,
+    order: TaskOrder = TaskOrder.asc,
+    db: Session = Depends(get_db)
+):
+    query_set = db.query(Tasks)
+
+    if status:
+        query_set = query_set.filter(Tasks.status == status.value)
+    if priority:
+        query_set = query_set.filter(Tasks.priority == priority.value)
+
+    # Parse date filters
+    if due_before:
+        due_before_date = datetime.strptime(due_before, "%d/%m/%Y").date()
+        query_set = query_set.filter(Tasks.due_date < due_before_date)
+    if due_after:
+        due_after_date = datetime.strptime(due_after, "%d/%m/%Y").date()
+        query_set = query_set.filter(Tasks.due_date > due_after_date)
+
+    sort_column = getattr(Tasks, sort_by.value)
+    order_func = asc if order == TaskOrder.asc else desc
+    query_set = query_set.order_by(order_func(sort_column))
+
+    total = query_set.count()
+    items = (
+        query_set.offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+    pages = (total + size - 1) // size
+    return PaginatedTaskResponse(items=items, total=total, page=page, size=size, pages=pages)
+
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
     user = db.query(Tasks).filter(Tasks.id == task_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Task not found")
     return user
-
 
 @app.post("/tasks/", response_model=TaskResponse, status_code=201)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
