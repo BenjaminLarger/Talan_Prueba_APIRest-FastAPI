@@ -96,6 +96,7 @@ class TaskPartialUpdate(BaseModel):
 
 # Response model for returning task data to protect any private information
 class TaskResponse(BaseModel):
+    model_config = {"from_attributes": True}  # Enable from_attributes for ORM models
     id: int
     title: str
     description: str
@@ -109,9 +110,6 @@ class TaskResponse(BaseModel):
         if isinstance(v, date):
             return v.strftime("%d/%m/%Y")
         return v
-
-    class Config:
-        from_attributes = True
 
 
 class TaskQueryParams(BaseModel):
