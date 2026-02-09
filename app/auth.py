@@ -80,7 +80,7 @@ async def login_for_access_token(
             detail="Incorrect username or password",
         )
 
-    token = create_access_token(user.username, user.id, timedelta(minutes=30))
+    token = create_access_token(user.username, user.id, user.role, timedelta(minutes=30))
 
     return {"access_token": token, "token_type": "bearer"}
 
@@ -92,10 +92,11 @@ def authenticate_user(db: Session, username: str, password: str):
     return user
 
 
-def create_access_token(username: str, user_id: int, expires_delta: timedelta):
+def create_access_token(username: str, user_id: int, role: str, expires_delta: timedelta):
     encode = {
         "sub": username,
         "user_id": user_id,
+        "role": role,
         "exp": datetime.now(timezone.utc) + expires_delta,
     }
     return jwt.encode(encode, os.getenv("SECRET_KEY"), algorithm=os.getenv("ALGORITHM"))
@@ -108,8 +109,11 @@ def get_current_user(
         payload = jwt.decode(
             token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")]
         )
+
+        role = payload.get("role", "user")
         username: str = payload.get("sub")
         user_id: int = payload.get("user_id")
+
         if username is None or user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
@@ -121,7 +125,7 @@ def get_current_user(
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
                 )
             return user
-        return {"username": username, "user_id": user_id}
+        return {"username": username, "user_id": user_id, "role": role}
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"

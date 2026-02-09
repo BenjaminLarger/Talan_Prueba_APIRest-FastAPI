@@ -74,8 +74,11 @@ def read_tasks(
     db: Session = Depends(get_db),
 ):
     tasks = (
-        db.query(Tasks).filter(Tasks.user_id == user.id).offset(skip).limit(limit).all()
+        db.query(Tasks)
     )
+    if user.role != "admin":
+        tasks = tasks.filter(Tasks.user_id == user.id)
+    tasks = tasks.offset(skip).limit(limit).all()
     return tasks
 
 
@@ -91,8 +94,14 @@ def list_tasks(
     sort_by: TaskFilter = TaskFilter.created_at,
     order: TaskOrder = TaskOrder.asc,
     db: Session = Depends(get_db),
+    filter_user: Optional[int] = None,
 ):
-    query_set = db.query(Tasks).filter(Tasks.user_id == user.id)
+    query_set = db.query(Tasks)
+    if user.role != "admin":
+        query_set = query_set.filter(Tasks.user_id == user.id)
+    else:
+        if filter_user:
+            query_set = query_set.filter(Tasks.user_id == filter_user)
 
     if status:
         query_set = query_set.filter(Tasks.status == status.value)
@@ -121,7 +130,10 @@ def list_tasks(
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
 def get_task_by_id(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
-    task = db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+    query = db.query(Tasks).filter(Tasks.id == task_id)
+    if user.role != "admin":
+        query = query.filter(Tasks.user_id == user.id)
+    task = query.first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -157,8 +169,13 @@ def update_task(
     user: user_dependency, task_id: int, task: TaskCreate, db: Session = Depends(get_db)
 ):
     existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+        db.query(Tasks).filter(Tasks.id == task_id)
     )
+    if user.role != "admin":
+        existing_task = existing_task.filter(Tasks.user_id == user.id)
+
+    existing_task = existing_task.first()
+
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -187,8 +204,12 @@ def update_task_partial(
     db: Session = Depends(get_db),
 ):
     existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+        db.query(Tasks).filter(Tasks.id == task_id)
     )
+    if user.role != "admin":
+        existing_task = existing_task.filter(Tasks.user_id == user.id)
+    existing_task = existing_task.first()
+
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -213,8 +234,12 @@ def update_task_partial(
 @app.delete("/tasks/{task_id}", status_code=204)
 def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
     existing_task = (
-        db.query(Tasks).filter(Tasks.id == task_id, Tasks.user_id == user.id).first()
+        db.query(Tasks).filter(Tasks.id == task_id)
     )
+    if user.role != "admin":
+        existing_task = existing_task.filter(Tasks.user_id == user.id)
+    existing_task = existing_task.first()
+    
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.delete(existing_task)
@@ -224,7 +249,10 @@ def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_d
 
 @app.delete("/tasks/", status_code=204)
 def delete_all_tasks(user: user_dependency, db: Session = Depends(get_db)):
-    db.query(Tasks).filter(Tasks.user_id == user.id).delete()
+    if user.role != "admin":
+        db.query(Tasks).filter(Tasks.user_id == user.id).delete()
+    else:
+        db.query(Tasks).delete()
     db.commit()
     return {}
 

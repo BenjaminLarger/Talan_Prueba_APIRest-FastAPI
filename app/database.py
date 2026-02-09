@@ -8,7 +8,6 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from app.models.user import Users
 
 # Create SQLite engine
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
@@ -18,6 +17,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create Base class for models
 Base = declarative_base()
+from app.models.user import Users
 
 
 class StatusEnum(str, Enum):
@@ -31,6 +31,9 @@ class PriorityEnum(str, Enum):
     medium = "medium"
     high = "high"
 
+class RoleEnum(str, Enum):
+    user = "user"
+    admin = "admin"
 
 class TaskFilter(str, Enum):
     created_at = "created_at"
@@ -145,7 +148,6 @@ class PaginatedTaskResponse(BaseModel):
 
 
 def get_db():
-    """Dependency to get a database session"""
     db = SessionLocal()
     try:
         yield db  # We try to create the database and yield it to the caller
