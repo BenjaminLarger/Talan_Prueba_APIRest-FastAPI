@@ -1,17 +1,21 @@
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
+from app import auth
 from app.config import settings
 from app.database import (Base, PaginatedTaskResponse, PriorityEnum,
                           StatusEnum, TaskCreate, TaskFilter, TaskOrder,
                           TaskPartialUpdate, TaskResponse, Tasks, engine,
                           get_db)
 
+from app.auth import get_current_user, db_dependency
+from starlette import status
+from app.models.user import Users
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,12 +24,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
-
-
-@app.get("/")
-def root():
-    return {"message": "Hello, World!"}
+app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan, )
+app.include_router(auth.router)
 
 
 @app.get("/health")
@@ -175,3 +175,12 @@ def delete_all_tasks(db: Session = Depends(get_db)):
     db.query(Tasks).delete()
     db.commit()
     return {}
+
+user_dependency = Annotated[Users, Depends(get_current_user)]
+  
+@app.get("/", status_code=status.HTTP_200_OK)
+async def user(user: user_dependency, db: db_dependency):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    return {"User": user}
+
