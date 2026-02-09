@@ -6,7 +6,7 @@ help:
 	@echo "  make install        Install dependencies from requirements.txt"
 	@echo "  make run            Start the development server"
 	@echo "  make test           Run test suite with pytest"
-	@echo "  make lint           Check code with flake8"
+	@echo "  make lint           Auto-format code with black and isort"
 	@echo "  make clean          Remove cache and temporary files"
 
 install:
@@ -22,6 +22,10 @@ test:
 	pytest tests/ -v
 
 lint:
+	black app/ tests/
+	isort app/ tests/
+
+lint-check:
 	flake8 app/ tests/ --max-line-length=120
 
 clean:
