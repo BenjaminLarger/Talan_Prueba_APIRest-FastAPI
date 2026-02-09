@@ -17,6 +17,8 @@ from app.auth import get_current_user, db_dependency
 from starlette import status
 from app.models.user import Users
 
+user_dependency = Annotated[Users, Depends(get_current_user)]
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Create database tables on application startup"""
@@ -34,13 +36,14 @@ def health_check():
 
 
 @app.get("/all_tasks/", response_model=list[TaskResponse])
-def read_tasks(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_tasks(user: user_dependency, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     tasks = db.query(Tasks).offset(skip).limit(limit).all()
     return tasks
 
 
 @app.get("/tasks/", response_model=PaginatedTaskResponse)
 def list_tasks(
+    user: user_dependency,
     page: int = 1,
     size: int = 10,
     status: Optional[StatusEnum] = None,
@@ -79,15 +82,15 @@ def list_tasks(
 
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task_by_id(task_id: int, db: Session = Depends(get_db)):
-    user = db.query(Tasks).filter(Tasks.id == task_id).first()
-    if not user:
+def get_task_by_id(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Tasks).filter(Tasks.id == task_id).first()
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return user
+    return task
 
 
 @app.post("/tasks/", response_model=TaskResponse, status_code=201)
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+def create_task(user: user_dependency, task: TaskCreate, db: Session = Depends(get_db)):
 
     # Convert due_date from DD/MM/YYYY string to date object
     due_date_obj = None
@@ -112,7 +115,7 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
 
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
-def update_task(task_id: int, task: TaskCreate, db: Session = Depends(get_db)):
+def update_task(user: user_dependency, task_id: int, task: TaskCreate, db: Session = Depends(get_db)):
     existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -136,7 +139,7 @@ def update_task(task_id: int, task: TaskCreate, db: Session = Depends(get_db)):
 
 @app.patch("/tasks/{task_id}", response_model=TaskResponse)
 def update_task_partial(
-    task_id: int, task: TaskPartialUpdate, db: Session = Depends(get_db)
+    user: user_dependency, task_id: int, task: TaskPartialUpdate, db: Session = Depends(get_db)
 ):
     existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
     if not existing_task:
@@ -161,7 +164,7 @@ def update_task_partial(
 
 
 @app.delete("/tasks/{task_id}", status_code=204)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(user: user_dependency, task_id: int, db: Session = Depends(get_db)):
     existing_task = db.query(Tasks).filter(Tasks.id == task_id).first()
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -171,12 +174,11 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @app.delete("/tasks/", status_code=204)
-def delete_all_tasks(db: Session = Depends(get_db)):
+def delete_all_tasks(user: user_dependency, db: Session = Depends(get_db)):
     db.query(Tasks).delete()
     db.commit()
     return {}
 
-user_dependency = Annotated[Users, Depends(get_current_user)]
   
 @app.get("/", status_code=status.HTTP_200_OK)
 async def user(user: user_dependency, db: db_dependency):
