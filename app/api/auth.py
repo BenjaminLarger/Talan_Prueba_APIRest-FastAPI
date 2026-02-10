@@ -4,41 +4,26 @@ from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from starlette import status
 
+from app.api.deps import db_dependency, oauth2_bearer
 from app.database import get_db
 from app.models.user import Users
+from app.schemas.user import CreateUserRequest, Token
 
 load_dotenv()
 
 router = APIRouter(
-    prefix="/auth",  # Prefix for all authentication-related routes
-    tags=["auth"],  # Separate tags for better documentation
+    prefix="/api/v1/auth",
+    tags=["auth"],
 )
 
 # Secret key and algorithm for JWT
 bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-oauth2_bearer = OAuth2PasswordBearer(tokenUrl="/auth/token")
-
-
-class CreateUserRequest(BaseModel):
-    username: str
-    password: str
-
-
-# Token validation and creation
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
-db_dependency = Annotated[Session, Depends(get_db)]
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
