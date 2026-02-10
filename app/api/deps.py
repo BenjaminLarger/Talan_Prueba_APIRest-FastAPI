@@ -1,5 +1,5 @@
-import os
 from typing import Annotated
+from app.config import settings
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
@@ -20,7 +20,7 @@ def get_current_user_with_db(
 ) -> Users:
     try:
         payload = jwt.decode(
-            token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")]
+            token, settings.secret_key, algorithms=[settings.algorithm]
         )
         user_id: int = payload.get("user_id")
         if user_id is None:

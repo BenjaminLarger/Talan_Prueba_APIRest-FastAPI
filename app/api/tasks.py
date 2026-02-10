@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
-from app.api.deps import db_dependency, user_dependency
+from app.api.deps import user_dependency
 from app.database import get_db
 from app.models.task import Tasks
 from app.schemas.task import (

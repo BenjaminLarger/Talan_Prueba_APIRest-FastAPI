@@ -1,7 +1,7 @@
 from datetime import date
 from enum import Enum
 from typing import Optional
-
+from datetime import datetime
 from pydantic import BaseModel, field_validator
 
 
@@ -41,7 +41,6 @@ class TaskCreate(BaseModel):
     def validate_due_date(cls, v):
         if v is None:
             return None
-        from datetime import datetime
         datetime.strptime(v, "%d/%m/%Y")
         return v
 
@@ -58,7 +57,6 @@ class TaskPartialUpdate(BaseModel):
     def validate_due_date(cls, v):
         if v is None:
             return None
-        from datetime import datetime
         datetime.strptime(v, "%d/%m/%Y")
         return v
 
@@ -98,7 +96,6 @@ class TaskQueryParams(BaseModel):
     def validate_dates(cls, v):
         if v is None:
             return None
-        from datetime import datetime
         if isinstance(v, str):
             return datetime.strptime(v, "%d/%m/%Y").date()
         return v

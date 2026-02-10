@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -9,9 +8,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from starlette import status
+from app.config import settings
 
 from app.api.deps import db_dependency, oauth2_bearer
-from app.database import get_db
 from app.models.user import Users
 from app.schemas.user import CreateUserRequest, Token
 
@@ -88,7 +87,7 @@ def create_access_token(
         "role": role,
         "exp": datetime.now(timezone.utc) + expires_delta,
     }
-    return jwt.encode(encode, os.getenv("SECRET_KEY"), algorithm=os.getenv("ALGORITHM"))
+    return jwt.encode(encode, settings.secret_key, algorithm=settings.algorithm)
 
 
 def get_current_user(
@@ -96,7 +95,7 @@ def get_current_user(
 ):
     try:
         payload = jwt.decode(
-            token, os.getenv("SECRET_KEY"), algorithms=[os.getenv("ALGORITHM")]
+            token, settings.secret_key, algorithms=[settings.algorithm]
         )
 
         role = payload.get("role", "user")
