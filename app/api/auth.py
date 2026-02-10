@@ -43,7 +43,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Password cannot be empty"
         )
-    hashed_password = bcrypt_context.hash(create_user_request.password[:72])
+    hashed_password = bcrypt_context.hash(create_user_request.password)
     new_user = Users(
         username=create_user_request.username, hashed_password=hashed_password
     )
